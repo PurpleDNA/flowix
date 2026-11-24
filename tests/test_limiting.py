@@ -1,3 +1,4 @@
+import math
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -103,3 +104,24 @@ def test_leaky_clock_moving_backwards(client, key):
         run(T)
     assert run(T - 10) == [0, 1]
     assert run(T - 9) == [1, 0]
+
+
+def test_token_retry_after_counts_time_already_passed(client, key):
+    run = with_fake_clock(client, token_bucket_script, key, 3, 1, 60)
+    for _ in range(3):
+        run(T)
+    assert run(T + 20) == [0, 40]
+    assert run(T + 59.5) == [0, 1]
+
+
+def test_leaky_allows_a_steady_stream_at_the_leak_rate(client, key):
+    run = with_fake_clock(client, leaky_bucket_script, key, 3, 1)
+    for _ in range(3):
+        run(T)
+    assert all(run(T + second) == [1, 0] for second in range(1, 51))
+
+
+def test_leaky_retry_after_rounds_up(client, key):
+    run = with_fake_clock(client, leaky_bucket_script, key, 1, 0.3)
+    run(T)
+    assert run(T) == [0, math.ceil(1 / 0.3)]
