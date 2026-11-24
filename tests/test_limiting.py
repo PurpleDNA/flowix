@@ -37,3 +37,19 @@ def test_concurrent_requests_never_exceed_capacity(client, key, algo, params):
     with ThreadPoolExecutor(20) as pool:
         results = list(pool.map(lambda _: run_limiter(key, limiter, client)["allowed"], range(200)))
     assert sum(results) == 50
+
+
+@pytest.mark.parametrize("algo, params, drain_time", [
+    ("token", {"capacity": 10, "refill_rate": 2, "refill_interval": 6}, 30),
+    ("leaky", {"capacity": 10, "leak_rate": 0.5}, 20),
+])
+def test_bucket_outlives_its_full_recovery(client, key, algo, params, drain_time):
+    # expiring any sooner would hand out a full bucket early
+    run_limiter(key, create_limiter(algo, **params), client)
+    assert client.ttl(f"flowix:{algo}:{key}") >= drain_time
+
+
+def test_idle_bucket_expires(client, key):
+    run_limiter(key, create_limiter("leaky", capacity=1, leak_rate=1), client)
+    time.sleep(2.5)
+    assert not client.exists(f"flowix:leaky:{key}")
