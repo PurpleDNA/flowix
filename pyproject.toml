@@ -1,6 +1,6 @@
 [project]
 name = "flowix"
-version = "0.1.0"
+version = "0.2.0"
 description = "Distributed, atomic rate limiting for Python, powered by Redis"
 readme = "README.md"
 license = "MIT"
@@ -14,6 +14,10 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Typing :: Typed",
 ]
+
+[project.urls]
+Repository = "https://github.com/PurpleDNA/flowix"
+Issues = "https://github.com/PurpleDNA/flowix/issues"
 
 [dependency-groups]
 dev = ["pytest>=8"]
