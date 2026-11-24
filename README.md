@@ -71,3 +71,26 @@ run_limiter("search:user:1", search_limiter, client)
 ```
 
 flowix stores its data in Redis under `flowix:`.
+
+## Errors
+
+Every exception inherits from `FlowixError`.
+
+| Exception | Raised when |
+|---|---|
+| `InvalidParameterType` | A parameter has the wrong type |
+| `InvalidParameterValue` | A number is zero or negative |
+| `IncorrectParameters` | Parameters are missing or not accepted by the algorithm |
+| `UnsupportedAlgorithm` | The algorithm does not exist |
+| `BackendFailed` | Redis could not be reached or returned an error |
+
+If Redis goes down, you decide whether to let requests through:
+
+```python
+from flowix import BackendFailed
+
+try:
+    allowed = run_limiter("user:1", limiter, client)["allowed"]
+except BackendFailed:
+    allowed = True  # or False to reject
+```
