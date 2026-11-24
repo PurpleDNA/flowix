@@ -53,3 +53,21 @@ def test_idle_bucket_expires(client, key):
     run_limiter(key, create_limiter("leaky", capacity=1, leak_rate=1), client)
     time.sleep(2.5)
     assert not client.exists(f"flowix:leaky:{key}")
+
+
+def test_algorithms_do_not_share_a_bucket(client, key):
+    token = create_limiter("token", capacity=2, refill_rate=1, refill_interval=60)
+    leaky = create_limiter("leaky", capacity=2, leak_rate=5)
+    allowed(key, token, client, 2)
+    assert run_limiter(key, leaky, client)["allowed"]
+    time.sleep(2.5)  # longer than the leaky bucket's ttl
+    assert not run_limiter(key, token, client)["allowed"]
+
+
+@pytest.mark.parametrize("prefix", ["token", "leaky"])
+def test_does_not_touch_the_apps_own_keys(client, key, prefix):
+    client.hset(f"{prefix}:{key}", mapping={"user": "42"})
+    run_limiter(key, create_limiter("token", capacity=2, refill_rate=1, refill_interval=1), client)
+    run_limiter(key, create_limiter("leaky", capacity=2, leak_rate=1), client)
+    assert client.hlen(f"{prefix}:{key}") == 1
+    assert client.ttl(f"{prefix}:{key}") == -1
