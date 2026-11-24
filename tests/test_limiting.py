@@ -4,6 +4,8 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from flowix import create_limiter, run_limiter
+from flowix.algorithm_lua_scripts.leaky_bucket import leaky_bucket_script
+from flowix.algorithm_lua_scripts.token_bucket import token_bucket_script
 
 
 def allowed(key, limiter, client, times):
@@ -71,3 +73,33 @@ def test_does_not_touch_the_apps_own_keys(client, key, prefix):
     run_limiter(key, create_limiter("leaky", capacity=2, leak_rate=1), client)
     assert client.hlen(f"{prefix}:{key}") == 1
     assert client.ttl(f"{prefix}:{key}") == -1
+
+
+# The scripts read Redis' clock, so these run a copy that takes the time as its
+# last argument instead.
+
+NOW = "local now = tonumber(t[1]) + tonumber(t[2]) / 1e6"
+T = 1_700_000_000.25
+
+
+def with_fake_clock(client, script, key, *args):
+    assert script.count(NOW) == 1
+    fake = client.register_script(script.replace(NOW, f"local now = tonumber(ARGV[{len(args) + 1}])"))
+    return lambda now: fake(keys=[f"flowix:{key}"], args=[*args, now])
+
+
+def test_token_clock_moving_backwards(client, key):
+    run = with_fake_clock(client, token_bucket_script, key, 3, 1, 60)
+    for _ in range(3):
+        run(T)
+    assert run(T - 10) == [0, 60]
+    assert run(T + 49) == [0, 1]
+    assert run(T + 50) == [1, 0]
+
+
+def test_leaky_clock_moving_backwards(client, key):
+    run = with_fake_clock(client, leaky_bucket_script, key, 3, 1)
+    for _ in range(3):
+        run(T)
+    assert run(T - 10) == [0, 1]
+    assert run(T - 9) == [1, 0]
