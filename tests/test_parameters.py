@@ -59,3 +59,21 @@ def test_capacity_must_be_an_integer(capacity):
 def test_exceptions_are_also_builtin_ones(error, builtin):
     assert issubclass(error, flowix.FlowixError)
     assert issubclass(error, builtin)
+
+
+def test_run_limiter_rejects_wrong_types():
+    limiter = create_limiter("leaky", **LEAKY)
+    with pytest.raises(flowix.InvalidParameterType):
+        run_limiter("a", object(), Redis())
+    with pytest.raises(flowix.InvalidParameterType):
+        run_limiter(1, limiter, Redis())
+    for client in (None, redis.asyncio.Redis()):
+        with pytest.raises(flowix.InvalidParameterType):
+            run_limiter("a", limiter, client)
+
+
+def test_redis_down_raises_backend_failed():
+    limiter = create_limiter("leaky", **LEAKY)
+    with pytest.raises(flowix.BackendFailed) as error:
+        run_limiter("a", limiter, Redis(port=1))
+    assert isinstance(error.value.__cause__, redis.exceptions.RedisError)
