@@ -94,3 +94,21 @@ try:
 except BackendFailed:
     allowed = True  # or False to reject
 ```
+
+## Limitations
+
+- Synchronous `redis.Redis` clients only; async clients are not supported yet.
+- Redis Cluster clients (`RedisCluster`) are not supported yet.
+
+## Running the tests
+
+The tests need a running Redis. They use database 15 on `localhost:6379`, and delete
+only the keys they create. Set `FLOWIX_TEST_REDIS_URL` to use a different one.
+
+```bash
+uv run pytest
+```
+
+## License
+
+MIT
