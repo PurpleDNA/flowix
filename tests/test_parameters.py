@@ -7,6 +7,8 @@ from flowix import create_limiter, run_limiter
 
 LEAKY = {"capacity": 2, "leak_rate": 1}
 TOKEN = {"capacity": 2, "refill_rate": 1, "refill_interval": 1}
+WINDOW = {"limit": 2, "window": 1}
+WINDOW_ALGOS = ["fixed_window", "sliding_log", "sliding_counter"]
 
 
 def test_everything_in_all_is_exported():
@@ -17,6 +19,9 @@ def test_everything_in_all_is_exported():
 def test_creates_the_right_limiter():
     assert isinstance(create_limiter("leaky", **LEAKY), flowix.LeakyBucketLimiter)
     assert isinstance(create_limiter("token", **TOKEN), flowix.TokenBucketLimiter)
+    assert isinstance(create_limiter("fixed_window", **WINDOW), flowix.FixedWindowLimiter)
+    assert isinstance(create_limiter("sliding_log", **WINDOW), flowix.SlidingLogLimiter)
+    assert isinstance(create_limiter("sliding_counter", **WINDOW), flowix.SlidingCounterLimiter)
 
 
 def test_unsupported_algorithm():
@@ -28,13 +33,19 @@ def test_unsupported_algorithm():
     ("leaky", {"capacity": 2}),
     ("leaky", {**LEAKY, "refill_rate": 1}),
     ("token", {"capacity": 2, "leak_rate": 1}),
+    *[(algo, {"limit": 2}) for algo in WINDOW_ALGOS],
+    *[(algo, {**WINDOW, "capacity": 2}) for algo in WINDOW_ALGOS],
 ])
 def test_missing_or_extra_parameters(algo, params):
     with pytest.raises(flowix.IncorrectParameters):
         create_limiter(algo, **params)
 
 
-@pytest.mark.parametrize("algo, params", [("leaky", LEAKY), ("token", TOKEN)])
+@pytest.mark.parametrize("algo, params", [
+    ("leaky", LEAKY),
+    ("token", TOKEN),
+    *[(algo, WINDOW) for algo in WINDOW_ALGOS],
+])
 def test_wrong_types_and_non_positive_values(algo, params):
     for name in params:
         with pytest.raises(flowix.InvalidParameterType):
@@ -48,6 +59,13 @@ def test_wrong_types_and_non_positive_values(algo, params):
 def test_capacity_must_be_an_integer(capacity):
     with pytest.raises(flowix.InvalidParameterType):
         create_limiter("leaky", capacity=capacity, leak_rate=1)
+
+
+@pytest.mark.parametrize("algo", WINDOW_ALGOS)
+@pytest.mark.parametrize("limit", [True, 1.5])
+def test_limit_must_be_an_integer(algo, limit):
+    with pytest.raises(flowix.InvalidParameterType):
+        create_limiter(algo, limit=limit, window=1)
 
 
 @pytest.mark.parametrize("error, builtin", [
