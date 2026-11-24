@@ -17,3 +17,11 @@ class IncorrectParameters(FlowixError, ValueError):
 class UnsupportedAlgorithm(FlowixError, ValueError):
     """The algorithm does not exist"""
     pass
+
+class BackendFailed(FlowixError):
+    """Redis could not be reached or returned an error"""
+    pass
+
+class RequestDisallowed(FlowixError):
+    """Request was not allowed, It has been limited"""
+    pass
