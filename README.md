@@ -37,3 +37,37 @@ else:
 |---|---|---|
 | `allowed` | `bool` | Whether the request may proceed |
 | `retry_after` | `int` | Whole seconds until a request can be allowed, `0` when allowed |
+
+## Algorithms
+
+### Token bucket
+
+```python
+create_limiter("token", capacity=10, refill_rate=5, refill_interval=60)
+```
+
+Allows bursts of up to `capacity` requests, then adds `refill_rate` tokens every
+`refill_interval` seconds. Each request uses one token.
+
+### Leaky bucket
+
+```python
+create_limiter("leaky", capacity=10, leak_rate=2)
+```
+
+Each request fills the bucket by one, and it drains continuously at `leak_rate`
+requests per second. Requests are rejected while the bucket is full. Requests are
+not queued or delayed.
+
+## Choosing keys
+
+A key identifies what is being limited, such as a user or an IP address. Limiters
+using the same algorithm and the same key share one bucket, so give each limit its
+own key:
+
+```python
+run_limiter("login:user:1", login_limiter, client)
+run_limiter("search:user:1", search_limiter, client)
+```
+
+flowix stores its data in Redis under `flowix:`.
