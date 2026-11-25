@@ -1,3 +1,5 @@
+import time
+
 from flowix.algorithm_lua_scripts.limiter_script import limiter_script
 
 NOW = "local now = tonumber(t[1]) + tonumber(t[2]) / 1e6"
@@ -18,3 +20,14 @@ def batch_with_fake_clock(client, *checks):
 def with_fake_clock(client, algo, key, *params):
     run = batch_with_fake_clock(client, (algo, key, *params))
     return lambda now: run(now)[0]
+
+
+def wait_on_redis_clock(client, seconds):
+    """Sleep until Redis' clock has advanced, as it can step back while we sleep."""
+    def now():
+        whole, micros = client.time()
+        return whole + micros / 1e6
+
+    end = now() + seconds
+    while (left := end - now()) > 0:
+        time.sleep(left)

@@ -8,7 +8,7 @@ import flowix
 from flowix import create_limiter, run_limiter, run_limiters
 from helpers import T, batch_with_fake_clock, with_fake_clock
 
-# every algorithm, with parameters it takes to allow `size` requests and then no more
+# every algorithm, with the parameters, in script order, to allow `size` requests and then no more
 ALGOS = {
     "token": lambda size: {"capacity": size, "refill_rate": 1, "refill_interval": 86400},
     "leaky": lambda size: {"capacity": size, "leak_rate": 0.00001},
@@ -45,21 +45,25 @@ def test_allowed_batch_charges_every_limiter(client, key):
 @pytest.mark.parametrize("used", [0, 2])
 @pytest.mark.parametrize("denier", ALGOS)
 def test_denied_batch_changes_nothing(client, key, denier, used):
-    full = (f"{key}:full", limiter(denier, 1))
-    run_limiter(*full, client)
-    others = [(f"{key}:{algo}", limiter(algo, 3)) for algo in ALGOS]
+    # on a fake clock: when a real one steps back, the stored times rightly follow it
+    full = (denier, f"{key}:full", *ALGOS[denier](1).values())
+    with_fake_clock(client, *full)(T)
+    others = [(algo, f"{key}:{algo}", *params(3).values()) for algo, params in ALGOS.items()]
+    run_others = batch_with_fake_clock(client, *others)
     for _ in range(used):
-        run_limiters(others, client)
+        run_others(T)
 
-    names = [(algo, f"{key}:{algo}") for algo in ALGOS] + [(denier, f"{key}:full")]
+    names = [check[:2] for check in (full, *others)]
     before = [stored(client, *name) for name in names]
     for checks in ([full, *others], [*others, full], [*others[:2], full, *others[2:]]):
+        run = batch_with_fake_clock(client, *checks)
         for _ in range(5):
-            assert run_limiters(checks, client)["allowed"] is False
+            results = run(T + 1)
+            assert [ok for ok, _ in results] == [int(check is not full) for check in checks]
     assert [stored(client, *name) for name in names] == before
 
     # and what was left before is still there
-    allowed = [run_limiters(others, client)["allowed"] for _ in range(4 - used)]
+    allowed = [all(ok for ok, _ in run_others(T + 1)) for _ in range(4 - used)]
     assert allowed == [True] * (3 - used) + [False]
 
 

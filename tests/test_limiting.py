@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from flowix import create_limiter, run_limiter
-from helpers import T, with_fake_clock
+from helpers import T, wait_on_redis_clock, with_fake_clock
 
 
 def allowed(key, limiter, client, times):
@@ -32,7 +32,7 @@ def test_blocks_at_capacity_then_allows_after_retry_after(client, key, algo, par
     assert blocked["allowed"] is False
     assert blocked["retry_after"] >= 1
 
-    time.sleep(blocked["retry_after"])
+    wait_on_redis_clock(client, blocked["retry_after"])
     assert run_limiter(key, limiter, client) == {"allowed": True, "retry_after": 0}
 
 
