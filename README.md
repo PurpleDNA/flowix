@@ -144,6 +144,54 @@ In a denied batch, `results` shows which limiters were the cause. The others say
 
 A batch cannot be empty, or repeat the same key with the same algorithm.
 
+## FastAPI
+
+```bash
+pip install "flowix[fastapi]"
+```
+
+Write a function that returns the limits for a request, and pass it to `rate_limit`:
+
+```python
+from fastapi import Depends, FastAPI
+from redis import Redis
+from redis.backoff import NoBackoff
+from redis.retry import Retry
+from flowix import create_limiter
+from flowix.fastapi import rate_limit
+
+app = FastAPI()
+client = Redis.from_url(
+    "redis://localhost:6379", socket_timeout=1, retry=Retry(NoBackoff(), 0)
+)
+user_limiter = create_limiter("token", capacity=10, refill_rate=5, refill_interval=60)
+team_limiter = create_limiter("sliding_counter", limit=1000, window=60)
+
+def search_limits(user: User = Depends(current_user)):
+    return [
+        (f"search:user:{user.id}", user_limiter),
+        (f"search:team:{user.team_id}", team_limiter),
+    ]
+
+@app.get("/search", dependencies=[Depends(rate_limit(client, search_limits))])
+async def search(): ...
+```
+
+When any limit is reached, the response is `429` with a `Retry-After` header, and none
+of the limits are charged. `search_limits` is a FastAPI dependency, so it can use the
+current user, headers or path parameters. Return every limit for a route from one
+function: separate `rate_limit` dependencies are charged separately.
+
+`rate_limit` runs in a thread, so it works with both `def` and `async def` routes. Avoid
+calling `run_limiter` directly in an `async def`: the whole app waits while Redis replies.
+
+When limiting by IP address, remember that behind a proxy `request.client.host` can be
+the proxy's address, which would make all your users share one limit.
+
+If Redis fails, `rate_limit` raises `BackendFailed`, which is a `500` response unless you
+handle it. With `rate_limit(client, search_limits, fail_open=True)` the request is allowed
+and a warning is logged.
+
 ## Errors
 
 Every exception inherits from `FlowixError`.
@@ -166,6 +214,20 @@ try:
 except BackendFailed:
     allowed = True  # or False to reject
 ```
+
+Give the client a timeout and turn off its retries:
+
+```python
+from redis.backoff import NoBackoff
+from redis.retry import Retry
+
+client = Redis.from_url(
+    "redis://localhost:6379", socket_timeout=1, retry=Retry(NoBackoff(), 0)
+)
+```
+
+Recent versions of redis-py retry 10 times by default. A request can then wait many
+seconds for a Redis that hangs, and each retry can charge the limit again.
 
 ## Limitations
 

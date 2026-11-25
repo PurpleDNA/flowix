@@ -16,9 +16,16 @@ jobs:
       fail-fast: false
       matrix:
         python: ["3.10", "3.11", "3.12", "3.13"]
+        redis: ["8"]
+        dependencies: [highest]
+        include:
+          # the oldest versions we support
+          - python: "3.10"
+            redis: "6.0.0"
+            dependencies: lowest-direct
     services:
       redis:
-        image: redis:8
+        image: redis:${{ matrix.redis }}
         ports: ["6379:6379"]
         options: >-
           --health-cmd "redis-cli ping"
@@ -28,4 +35,4 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.4.0
-      - run: uv run --python ${{ matrix.python }} pytest
+      - run: uv run --python ${{ matrix.python }} --resolution ${{ matrix.dependencies }} pytest

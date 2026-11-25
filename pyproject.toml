@@ -1,6 +1,6 @@
 [project]
 name = "flowix"
-version = "0.2.0"
+version = "0.3.0"
 description = "Distributed, atomic rate limiting for Python, powered by Redis"
 readme = "README.md"
 license = "MIT"
@@ -15,12 +15,15 @@ classifiers = [
     "Typing :: Typed",
 ]
 
+[project.optional-dependencies]
+fastapi = ["fastapi>=0.100.0"]
+
 [project.urls]
 Repository = "https://github.com/PurpleDNA/flowix"
 Issues = "https://github.com/PurpleDNA/flowix/issues"
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "flowix[fastapi]", "httpx>=0.27"]
 
 [build-system]
 requires = ["hatchling"]
